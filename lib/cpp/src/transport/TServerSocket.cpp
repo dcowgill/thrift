@@ -42,31 +42,19 @@ namespace apache { namespace thrift { namespace transport {
 using namespace std;
 using boost::shared_ptr;
 
-TServerSocket::TServerSocket(int port) :
-  port_(port),
-  serverSocket_(-1),
-  acceptBacklog_(1024),
-  sendTimeout_(0),
-  recvTimeout_(0),
-  retryLimit_(0),
-  retryDelay_(0),
-  tcpSendBuffer_(0),
-  tcpRecvBuffer_(0),
-  intSock1_(-1),
-  intSock2_(-1) {}
+TServerSocket::TServerSocket(int port) {
+  init(port);
+}
 
-TServerSocket::TServerSocket(int port, int sendTimeout, int recvTimeout) :
-  port_(port),
-  serverSocket_(-1),
-  acceptBacklog_(1024),
-  sendTimeout_(sendTimeout),
-  recvTimeout_(recvTimeout),
-  retryLimit_(0),
-  retryDelay_(0),
-  tcpSendBuffer_(0),
-  tcpRecvBuffer_(0),
-  intSock1_(-1),
-  intSock2_(-1) {}
+TServerSocket::TServerSocket(string host, int port) : host_(host) {
+  init(port);
+}
+
+TServerSocket::TServerSocket(int port, int sendTimeout, int recvTimeout) {
+  init(port);
+  setSendTimeout(sendTimeout);
+  setRecvTimeout(recvTimeout);
+}
 
 TServerSocket::~TServerSocket() {
   close();
@@ -116,8 +104,9 @@ void TServerSocket::listen() {
   hints.ai_flags = AI_PASSIVE | AI_ADDRCONFIG;
   sprintf(port, "%d", port_);
 
-  // Wildcard address
-  error = getaddrinfo(NULL, port, &hints, &res0);
+  // NULL indicates wildcard address
+  const char* host = host_.empty() ? NULL : host_.c_str();
+  error = getaddrinfo(host, port, &hints, &res0);
   if (error) {
     GlobalOutput.printf("getaddrinfo %d: %s", error, gai_strerror(error));
     close();
@@ -184,7 +173,7 @@ void TServerSocket::listen() {
   #ifdef IPV6_V6ONLY
   if (res->ai_family == AF_INET6) {
     int zero = 0;
-    if (-1 == setsockopt(serverSocket_, IPPROTO_IPV6, IPV6_V6ONLY, 
+    if (-1 == setsockopt(serverSocket_, IPPROTO_IPV6, IPV6_V6ONLY,
           &zero, sizeof(zero))) {
       GlobalOutput.perror("TServerSocket::listen() IPV6_V6ONLY ", errno);
     }
@@ -367,6 +356,20 @@ void TServerSocket::close() {
     ::close(intSock2_);
   }
   serverSocket_ = -1;
+  intSock1_ = -1;
+  intSock2_ = -1;
+}
+
+void TServerSocket::init(int port) {
+  port_ = port;
+  serverSocket_ = -1;
+  acceptBacklog_ = 1024;
+  sendTimeout_ = 0;
+  recvTimeout_ = 0;
+  retryLimit_ = 0;
+  retryDelay_ = 0;
+  tcpSendBuffer_ = 0;
+  tcpRecvBuffer_ = 0;
   intSock1_ = -1;
   intSock2_ = -1;
 }

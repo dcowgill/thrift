@@ -35,6 +35,7 @@ class TSocket;
 class TServerSocket : public TServerTransport {
  public:
   TServerSocket(int port);
+  TServerSocket(std::string host, int port);
   TServerSocket(int port, int sendTimeout, int recvTimeout);
 
   ~TServerSocket();
@@ -57,6 +58,9 @@ class TServerSocket : public TServerTransport {
   boost::shared_ptr<TTransport> acceptImpl();
 
  private:
+  void init(int port);
+
+  std::string host_;
   int port_;
   int serverSocket_;
   int acceptBacklog_;
