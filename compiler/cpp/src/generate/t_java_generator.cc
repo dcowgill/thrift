@@ -49,6 +49,9 @@ class t_java_generator : public t_oop_generator {
     iter = parsed_options.find("beans");
     bean_style_ = (iter != parsed_options.end());
 
+    iter = parsed_options.find("private-members");
+    private_members_ = (iter != parsed_options.end());
+
     iter = parsed_options.find("nocamel");
     nocamel_style_ = (iter != parsed_options.end());
 
@@ -199,9 +202,6 @@ class t_java_generator : public t_oop_generator {
   void generate_deep_copy_container(std::ofstream& out, std::string source_name_p1, std::string source_name_p2, std::string result_name, t_type* type);
   void generate_deep_copy_non_container(std::ofstream& out, std::string source_name, std::string dest_name, t_type* type);
 
-  bool is_comparable(t_struct* tstruct);
-  bool is_comparable(t_type* type);
-
   bool has_bit_vector(t_struct* tstruct);
 
   /**
@@ -246,6 +246,7 @@ class t_java_generator : public t_oop_generator {
   std::string package_dir_;
 
   bool bean_style_;
+  bool private_members_;
   bool nocamel_style_;
   bool gen_hash_code_;
 
@@ -703,9 +704,7 @@ void t_java_generator::generate_java_union(t_struct* tstruct) {
     "public " << (is_final ? "final " : "") << "class " << tstruct->get_name() 
     << " extends TUnion<" << tstruct->get_name() << "._Fields> ";
 
-  if (is_comparable(tstruct)) {
-    f_struct << "implements Comparable<" << type_name(tstruct) << "> ";
-  }
+  f_struct << "implements Comparable<" << type_name(tstruct) << "> ";
 
   scope_up(f_struct);
 
@@ -1002,22 +1001,20 @@ void t_java_generator::generate_union_comparisons(ofstream& out, t_struct* tstru
   indent(out) << "}" << endl;
   out << endl;
 
-  if (is_comparable(tstruct)) {
-    indent(out) << "@Override" << endl;
-    indent(out) << "public int compareTo(" << type_name(tstruct) << " other) {" << endl;
-    indent(out) << "  int lastComparison = TBaseHelper.compareTo(getSetField(), other.getSetField());" << endl;
-    indent(out) << "  if (lastComparison == 0) {" << endl;
-    indent(out) << "    Object myValue = getFieldValue();" << endl;
-    indent(out) << "    if (myValue instanceof byte[]) {" << endl;
-    indent(out) << "      return TBaseHelper.compareTo((byte[])myValue, (byte[])other.getFieldValue());" << endl;
-    indent(out) << "    } else {" << endl;
-    indent(out) << "      return TBaseHelper.compareTo((Comparable)myValue, (Comparable)other.getFieldValue());" << endl;
-    indent(out) << "    }" << endl;
-    indent(out) << "  }" << endl;
-    indent(out) << "  return lastComparison;" << endl;
-    indent(out) << "}" << endl;
-    out << endl;
-  }
+  indent(out) << "@Override" << endl;
+  indent(out) << "public int compareTo(" << type_name(tstruct) << " other) {" << endl;
+  indent(out) << "  int lastComparison = TBaseHelper.compareTo(getSetField(), other.getSetField());" << endl;
+  indent(out) << "  if (lastComparison == 0) {" << endl;
+  indent(out) << "    Object myValue = getFieldValue();" << endl;
+  indent(out) << "    if (myValue instanceof byte[]) {" << endl;
+  indent(out) << "      return TBaseHelper.compareTo((byte[])myValue, (byte[])other.getFieldValue());" << endl;
+  indent(out) << "    } else {" << endl;
+  indent(out) << "      return TBaseHelper.compareTo((Comparable)myValue, (Comparable)other.getFieldValue());" << endl;
+  indent(out) << "    }" << endl;
+  indent(out) << "  }" << endl;
+  indent(out) << "  return lastComparison;" << endl;
+  indent(out) << "}" << endl;
+  out << endl;
 }
 
 void t_java_generator::generate_union_hashcode(ofstream& out, t_struct* tstruct) {
@@ -1077,9 +1074,7 @@ void t_java_generator::generate_java_struct_definition(ofstream &out,
   }
   out << "implements TBase<" << tstruct->get_name() << "._Fields>, java.io.Serializable, Cloneable";
 
-  if (is_comparable(tstruct)) {
-    out << ", Comparable<" << type_name(tstruct) << ">";
-  }
+  out << ", Comparable<" << type_name(tstruct) << ">";
 
   out << " ";
 
@@ -1098,7 +1093,7 @@ void t_java_generator::generate_java_struct_definition(ofstream &out,
   out << endl;
 
   for (m_iter = members.begin(); m_iter != members.end(); ++m_iter) {
-    if (bean_style_) {
+    if (bean_style_ || private_members_) {
       indent(out) << "private ";
     } else {
       generate_java_doc(out, *m_iter);
@@ -1241,9 +1236,7 @@ void t_java_generator::generate_java_struct_definition(ofstream &out,
   generate_generic_isset_method(out, tstruct);
 
   generate_java_struct_equality(out, tstruct);
-  if (is_comparable(tstruct)) {
-    generate_java_struct_compare_to(out, tstruct);
-  }
+  generate_java_struct_compare_to(out, tstruct);
 
   generate_java_struct_reader(out, tstruct);
   if (is_result) {
@@ -1876,13 +1869,20 @@ void t_java_generator::generate_java_bean_boilerplate(ofstream& out,
 
     // Simple setter
     generate_java_doc(out, field);
-    indent(out) << "public " << type_name(tstruct) << " set" << cap_name << "(" << type_name(type) <<
-      " " << field_name << ") {" << endl;
+    indent(out) << "public ";
+    if (bean_style_) {
+      out << "void";
+    } else {
+      out << type_name(tstruct);
+    }
+    out << " set" << cap_name << "(" << type_name(type) << " " << field_name << ") {" << endl;
     indent_up();
     indent(out) << "this." << field_name << " = " << field_name << ";" <<
       endl;
     generate_isset_set(out, field);
-    indent(out) << "return this;" << endl;
+    if (!bean_style_) {
+      indent(out) << "return this;" << endl;
+    }
 
     indent_down();
     indent(out) << "}" << endl << endl;
@@ -2203,8 +2203,24 @@ void t_java_generator::generate_service_client(t_service* tservice) {
   }
 
   indent(f_service_) <<
-    "public static class Client" << extends_client << " implements Iface {" << endl;
+    "public static class Client" << extends_client << " implements TServiceClient, Iface {" << endl;
   indent_up();
+
+  indent(f_service_) << "public static class Factory implements TServiceClientFactory<Client> {" << endl;
+  indent_up();
+  indent(f_service_) << "public Factory() {}" << endl;
+  indent(f_service_) << "public Client getClient(TProtocol prot) {" << endl;
+  indent_up();
+  indent(f_service_) << "return new Client(prot);" << endl;
+  indent_down();
+  indent(f_service_) << "}" << endl;
+  indent(f_service_) << "public Client getClient(TProtocol iprot, TProtocol oprot) {" << endl;
+  indent_up();
+  indent(f_service_) << "return new Client(iprot, oprot);" << endl;
+  indent_down();
+  indent(f_service_) << "}" << endl;
+  indent_down();
+  indent(f_service_) << "}" << endl << endl;
 
   indent(f_service_) <<
     "public Client(TProtocol prot)" << endl;
@@ -3550,13 +3566,11 @@ void t_java_generator::generate_field_name_constants(ofstream& out, t_struct* ts
 
   out << ";" << endl << endl;
 
-  indent(out) << "private static final Map<Integer, _Fields> byId = new HashMap<Integer, _Fields>();" << endl;
   indent(out) << "private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();" << endl;
   out << endl;
 
   indent(out) << "static {" << endl;
   indent(out) << "  for (_Fields field : EnumSet.allOf(_Fields.class)) {" << endl;
-  indent(out) << "    byId.put((int)field._thriftId, field);" << endl;
   indent(out) << "    byName.put(field.getFieldName(), field);" << endl;
   indent(out) << "  }" << endl;
   indent(out) << "}" << endl << endl;
@@ -3565,7 +3579,22 @@ void t_java_generator::generate_field_name_constants(ofstream& out, t_struct* ts
   indent(out) << " * Find the _Fields constant that matches fieldId, or null if its not found." << endl;
   indent(out) << " */" << endl;
   indent(out) << "public static _Fields findByThriftId(int fieldId) {" << endl;
-  indent(out) << "  return byId.get(fieldId);" << endl;
+  indent_up();
+  indent(out) << "switch(fieldId) {" << endl;
+  indent_up();
+
+  for (m_iter = members.begin(); m_iter != members.end(); ++m_iter) {
+    indent(out) << "case " << (*m_iter)->get_key() << ": // " << constant_name((*m_iter)->get_name()) << endl;
+    indent(out) << "  return " << constant_name((*m_iter)->get_name()) << ";" << endl;
+  }
+
+  indent(out) << "default:" << endl;
+  indent(out) << "  return null;" << endl;
+
+  indent_down();
+  indent(out) << "}" << endl;
+
+  indent_down();
   indent(out) << "}" << endl << endl;
 
   indent(out) << "/**" << endl;
@@ -3606,32 +3635,6 @@ void t_java_generator::generate_field_name_constants(ofstream& out, t_struct* ts
   indent(out) << "}" << endl;
 }
 
-bool t_java_generator::is_comparable(t_struct* tstruct) {
-  const vector<t_field*>& members = tstruct->get_members();
-  vector<t_field*>::const_iterator m_iter;
-
-  for (m_iter = members.begin(); m_iter != members.end(); ++m_iter) {
-    if (!is_comparable(get_true_type((*m_iter)->get_type()))) {
-      return false;
-    }
-  }
-  return true;
-}
-
-bool t_java_generator::is_comparable(t_type* type) {
-  if (type->is_container()) {
-    if (type->is_list()) {
-      return is_comparable(get_true_type(((t_list*)type)->get_elem_type()));
-    } else {
-      return false;
-    }
-  } else if (type->is_struct() || type->is_xception()) {
-    return is_comparable((t_struct*)type);
-  } else {
-    return true;
-  }
-}
-
 bool t_java_generator::has_bit_vector(t_struct* tstruct) {
   const vector<t_field*>& members = tstruct->get_members();
   vector<t_field*>::const_iterator m_iter;
@@ -3645,7 +3648,8 @@ bool t_java_generator::has_bit_vector(t_struct* tstruct) {
 }
 
 THRIFT_REGISTER_GENERATOR(java, "Java",
-"    beans:           Generate bean-style output files.\n"
+"    beans:           Members will be private, and setter methods will return void.\n"
+"    private-members: Members will be private, but setter methods will return 'this' like usual.\n"
 "    nocamel:         Do not use CamelCase field accessors with beans.\n"
 "    hashcode:        Generate quality hashCode methods.\n"
 );

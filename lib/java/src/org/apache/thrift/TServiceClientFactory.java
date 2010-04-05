@@ -17,32 +17,29 @@
  * under the License.
  */
 
+package org.apache.thrift;
 
-package org.apache.thrift.test;
+import org.apache.thrift.protocol.TProtocol;
 
-import org.apache.thrift.protocol.TBinaryProtocol;
-import org.apache.thrift.transport.TSocket;
+/**
+ * A TServiceClientFactory provides a general way to get a TServiceClient
+ * connected to a remote TService via a protocol.
+ * @param <T>
+ */
+public interface TServiceClientFactory<T extends TServiceClient> {
+  /**
+   * Get a brand-new T using <i>prot</i> as both the input and output protocol.
+   * @param prot
+   * @return
+   */
+  public T getClient(TProtocol prot);
 
-
-public class OverloadNonblockingServer {
-
-  public static void main(String[] args) throws Exception {
-    int msg_size_mb = Integer.parseInt(args[0]);
-    int msg_size = msg_size_mb * 1024 * 1024;
-
-    TSocket socket = new TSocket("localhost", 9090);
-    TBinaryProtocol binprot = new TBinaryProtocol(socket);
-    socket.open();
-    binprot.writeI32(msg_size);
-    binprot.writeI32(1);
-    socket.flush();
-
-    System.in.read();
-    // Thread.sleep(30000);
-    for (int i = 0; i < msg_size_mb; i++) {
-      binprot.writeBinary(new byte[1024 * 1024]);
-    }
-
-    socket.close();
-  }
+  /**
+   * Get a brand new T using the specified input and output protocols. The
+   * input and output protocols may be the same instance.
+   * @param iprot
+   * @param oprot
+   * @return
+   */
+  public T getClient(TProtocol iprot, TProtocol oprot);
 }

@@ -17,41 +17,23 @@
  * under the License.
  */
 
-package org.apache.thrift.protocol;
+package org.apache.thrift;
+
+import org.apache.thrift.protocol.TProtocol;
 
 /**
- * Helper class that encapsulates struct metadata.
- *
+ * A TServiceClient is used to communicate with a TService implementation
+ * across protocols and transports.
  */
-public final class TMessage {
-  public TMessage() {
-    this("", TType.STOP, 0);
-  }
-
-  public TMessage(String n, byte t, int s) {
-    name = n;
-    type = t;
-    seqid = s;
-  }
-
-  public final String name;
-  public final byte type;
-  public final int seqid;
-
-  @Override
-  public String toString() {
-    return "<TMessage name:'" + name + "' type: " + type + " seqid:" + seqid + ">";
-  }
-
-  @Override
-  public boolean equals(Object other) {
-    if (other instanceof TMessage) {
-      return equals((TMessage) other);
-    }
-    return false;
-  }
-
-  public boolean equals(TMessage other) {
-    return name.equals(other.name) && type == other.type && seqid == other.seqid;
-  }
+public interface TServiceClient {
+  /**
+   * Get the TProtocol being used as the input (read) protocol.
+   * @return
+   */
+  public TProtocol getInputProtocol();
+  /**
+   * Get the TProtocol being used as the output (write) protocol.
+   * @return
+   */
+  public TProtocol getOutputProtocol();
 }
